@@ -158,7 +158,12 @@ tr.returned:hover td { background: #f8e3e1; }
 
 /* ---------- charts ---------- */
 .charts { display: grid; grid-template-columns: 1.6fr 1fr; gap: 22px; margin-top: 22px; }
-.chart-box { background: var(--surface); border: 1px solid var(--rule); padding: 16px; }
+.chart-box { background: var(--surface); border: 1px solid var(--rule); padding: 16px;
+  /* A grid column will not shrink below its content's width by default, and a
+     drawn chart's content IS its current width — so after the window narrowed,
+     the charts stayed wide and pushed the page sideways. min-width:0 lets the
+     column shrink, and the chart then redraws to fit it. */
+  min-width: 0; }
 .chart-box h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
 .chart-box canvas { max-height: 240px; }
 

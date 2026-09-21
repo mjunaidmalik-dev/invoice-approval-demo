@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Invoice Approval</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="mark">Ledger<span>flow</span></div>
+    <h1>Invoice approval</h1>
+    <p class="sub">Route supplier invoices through approval, match payments, keep the trail.</p>
+
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" placeholder="you@company.com">
+
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="••••••••">
+
+    <button class="btn btn-wide" id="go">Sign in</button>
+    <p id="msg" style="color:var(--red);min-height:20px;margin:10px 0 0;font-size:13px"></p>
+
+    <div class="demo-logins">
+      <p>This is a demo. Pick a role to sign in — each one sees a different part of the chain.</p>
+      <button data-email="submitter@demo.app"><b>Ayesha Karim</b> <em>Submitter</em></button>
+      <button data-email="manager@demo.app"><b>Daniel Okafor</b> <em>Manager — approves first</em></button>
+      <button data-email="finance@demo.app"><b>Mei Tanaka</b> <em>Finance — approves and pays</em></button>
+      <button data-email="admin@demo.app"><b>Demo Admin</b> <em>Sees everything</em></button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEMO_PASSWORD = 'Demo@2026';
+const $ = s => document.querySelector(s);
+
+async function signIn(email, password) {
+  $('#msg').textContent = '';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const d = await r.json();
+    if (!r.ok) { $('#msg').textContent = d.error || 'Could not sign in'; return; }
+    localStorage.setItem('demo_token', d.token);
+    localStorage.setItem('demo_user', JSON.stringify(d.user));
+    location.href = '/app.html';
+  } catch {
+    $('#msg').textContent = 'The server is not responding. It may be waking up — try again in a few seconds.';
+  }
+}
+
+$('#go').onclick = () => signIn($('#email').value.trim(), $('#password').value);
+$('#password').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
+document.querySelectorAll('.demo-logins button').forEach(b => {
+  b.onclick = () => {
+    $('#email').value = b.dataset.email;
+    $('#password').value = DEMO_PASSWORD;
+    signIn(b.dataset.email, DEMO_PASSWORD);
+  };
+});
+if (localStorage.getItem('demo_token')) location.href = '/app.html';
+</script>
+</body>
+</html>

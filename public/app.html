@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice Approval</title>
+<link rel="stylesheet" href="/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="mark">Ledger<span>flow</span></div>
+    <nav id="nav">
+      <button data-tab="dashboard" aria-current="true">Overview</button>
+      <button data-tab="queue">My queue <span class="count" id="queueCount"></span></button>
+      <button data-tab="invoices">All invoices</button>
+      <button data-tab="payments">Payments</button>
+      <button data-tab="import">Import</button>
+    </nav>
+    <div class="who">
+      <b id="whoName"></b>
+      <small id="whoRole"></small>
+      <button class="btn btn-quiet btn-sm" id="signOut">Sign out</button>
+    </div>
+  </aside>
+
+  <main id="main"><p class="lede">Loading…</p></main>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

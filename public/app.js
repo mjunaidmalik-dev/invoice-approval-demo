@@ -194,11 +194,11 @@ function invoiceTable(rows, opts = {}) {
         ? `<span class="why">Returned by ${esc(inv.last_action_by || '')}: ${esc(inv.last_note)}</span>` : '';
       tr.innerHTML = `
         <td><b>${esc(inv.invoice_no)}</b>${why}</td>
-        <td>${esc(inv.vendor)}<br><span class="muted">${esc(inv.description || '')}</span></td>
+        <td class="sup">${esc(inv.vendor)}<br><span class="muted">${esc(inv.description || '')}</span></td>
         <td class="num">${money(inv.amount)}${
           inv.payment_state === 'partial'
             ? `<br><span class="muted">paid ${money(inv.paid_amount)}</span>` : ''}</td>
-        <td>${day(inv.invoice_date)}</td>
+        <td class="nowrap">${day(inv.invoice_date)}</td>
         <td>${statusTag(inv)}</td>
         <td>${chain(inv)}</td>
         <td class="acts"></td>`;
@@ -286,7 +286,7 @@ function renderPayments() {
       <td>${esc(p.txn_id)}</td>
       <td>${esc(p.invoice_no || '—')}${p.vendor ? '<br><span class="muted">' + esc(p.vendor) + '</span>' : ''}</td>
       <td class="num">${money(p.amount)}</td>
-      <td>${day(p.paid_date)}</td>
+      <td class="nowrap">${day(p.paid_date)}</td>
       <td>${esc(p.bank || '—')}</td>
       <td>${p.invoice_id
             ? '<span class="tag paid">Matched</span>'

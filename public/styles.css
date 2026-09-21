@@ -133,12 +133,17 @@ td { padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-alig
 tbody tr:hover { background: #f7f9fa; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.acts { white-space: nowrap; }
+/* A date or a status label broken across two lines reads as damaged data.
+   These cells keep their width; if the table then cannot fit, it scrolls
+   inside its own panel (.tbl-scroll) — the page itself never scrolls sideways. */
+td.nowrap { white-space: nowrap; }
+td.sup { min-width: 11em; }
 td.acts button + button { margin-left: 6px; }
 tr.returned td { background: var(--red-tint); }
 tr.returned:hover td { background: #f8e3e1; }
 .empty { padding: 34px 16px; color: var(--ink-faint); text-align: center; }
 
-.tag { display: inline-block; padding: 1px 7px; font-size: 12px; border: 1px solid; }
+.tag { display: inline-block; padding: 1px 7px; font-size: 12px; border: 1px solid; white-space: nowrap; }
 .tag.paid    { color: var(--green); border-color: #b9d3c9; background: var(--green-tint); }
 .tag.pending { color: var(--ink-soft); border-color: var(--rule); background: var(--page); }
 .tag.reject  { color: var(--red); border-color: #e2b6b2; background: var(--red-tint); }

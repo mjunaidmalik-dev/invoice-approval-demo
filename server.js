@@ -503,4 +503,32 @@ app.post('/api/import/payments', upload.single('file'), async (req, res) => {
 
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
-app.listen(PORT, () => console.log(`Invoice demo listening on ${PORT}`));
+// ============================================================
+// STARTUP
+//
+// With RESET_ON_START=true (set on the hosting service only, never in a
+// local .env), the demo data is rebuilt before the server takes its first
+// request. On a free instance that sleeps when idle, this means anyone
+// arriving after a quiet spell finds a clean demo, not the last visitor's
+// half-finished clicks.
+//
+// A failed reset never stops the site: it logs and serves what is there.
+// ============================================================
+async function start() {
+  if (process.env.RESET_ON_START === 'true') {
+    const t0 = Date.now();
+    let client;
+    try {
+      client = await pool.connect();
+      const r = await require('./seed').seedDatabase(client, { reset: true, log: () => {} });
+      console.log(`Demo data reset in ${Date.now() - t0} ms — ${r.invoices} invoices, ${r.approvals} approvals, ${r.payments} payments`);
+    } catch (e) {
+      console.error('Demo reset FAILED, serving existing data:', e.message);
+    } finally {
+      if (client) client.release();
+    }
+  }
+  app.listen(PORT, () => console.log(`Invoice demo listening on ${PORT}`));
+}
+
+start();

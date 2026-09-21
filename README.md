@@ -64,6 +64,17 @@ Any host that runs Node and reaches a Postgres will do. On Render:
 Free tiers sleep after inactivity, so the first visit can take around 30 seconds. The
 login screen says so if the server does not answer, rather than showing a dead button.
 
+### Keeping the public demo clean
+
+Set `RESET_ON_START=true` on the hosting service — **not** in a local `.env`. The server
+then rebuilds the demo data before taking its first request. On a free tier that sleeps
+when idle, anyone arriving after a quiet spell finds a fresh demo rather than the last
+visitor's half-finished clicks.
+
+The reset runs as a single transaction, so it either completes or changes nothing. If it
+fails — the database briefly unreachable, say — the server logs it and starts anyway with
+the existing data.
+
 ---
 
 ## Design decisions worth knowing

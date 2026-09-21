@@ -25,7 +25,8 @@ const DEMO_PASSWORD = 'Demo@2026';
 // A fixed seed means every reset produces the SAME demo. When a
 // buyer asks "what happens if I approve this one", you want the
 // same invoice to be there next time.
-let _s = 20260913;
+const SEED = 20260913;
+let _s = SEED;
 function rnd() { _s = (_s * 1103515245 + 12345) & 0x7fffffff; return _s / 0x7fffffff; }
 const pick = arr => arr[Math.floor(rnd() * arr.length)];
 const between = (lo, hi) => Math.round((lo + rnd() * (hi - lo)) * 100) / 100;
@@ -275,100 +276,126 @@ function writeWorkbook(file, sheets) {
 }
 
 // ---------- database load -----------------------------------
-async function loadDatabase(invoices, approvals, payments) {
-  const { Client } = require('pg');
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
-  await client.connect();
-
-  if (RESET) {
-    console.log('  applying schema.sql');
-    await client.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
-  }
-
-  const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
-  const userIds = {};
-  for (const u of USERS) {
-    const r = await client.query(
-      `INSERT INTO users (full_name,email,password_hash,role,acts_at_stage,can_approve,can_reject,can_import)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash
-       RETURNING user_id`,
-      [u.full_name, u.email, hash, u.role, u.acts_at_stage, u.can_approve, u.can_reject, u.can_import]);
-    userIds[u.email] = r.rows[0].user_id;
-  }
-  console.log(`  ${USERS.length} users`);
-
-  const invIds = {};
-  for (const v of invoices) {
-    const r = await client.query(
-      `INSERT INTO invoices (invoice_no,vendor,description,amount,invoice_date,due_date,stage,status,submitted_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING invoice_id`,
-      [v.invoice_no, v.vendor, v.description, v.amount, v.invoice_date, v.due_date,
-       v.stage, v.status, userIds['submitter@demo.app']]);
-    invIds[v.invoice_no] = r.rows[0].invoice_id;
-  }
-  console.log(`  ${invoices.length} invoices`);
-
-  for (const a of approvals) {
-    await client.query(
-      `INSERT INTO approvals (invoice_id,user_id,action,from_stage,to_stage,note,acted_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [invIds[a.invoice_no], userIds[a.email], a.action, a.from_stage, a.to_stage, a.note, a.acted_at]);
-  }
-  console.log(`  ${approvals.length} approval rows`);
-
-  for (const p of payments) {
-    const id = invIds[p.invoice_no] || null;
-    await client.query(
-      `INSERT INTO payments (txn_id,invoice_no,invoice_id,amount,paid_date,bank,orphan_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (txn_id) DO NOTHING`,
-      [p.txn_id, p.invoice_no, id, p.amount, p.paid_date, p.bank,
-       id ? null : 'No invoice with this number']);
-
-    if (id) {
-      await client.query(
-        `UPDATE invoices
-            SET paid_amount = paid_amount + $1,
-                paid_date = $2,
-                payment_state = CASE
-                  WHEN paid_amount + $1 <  amount THEN 'partial'
-                  WHEN paid_amount + $1 >  amount THEN 'over'
-                  ELSE 'full' END
-          WHERE invoice_id = $3`, [p.amount, p.paid_date, id]);
-    }
-  }
-  console.log(`  ${payments.length} payments`);
-
-  await client.end();
-}
-
-// ---------- main --------------------------------------------
-(async () => {
+// Takes an already-connected client, so the same code runs from the
+// command line and from server.js at startup.
+//
+// The whole load is ONE transaction: it lands completely or not at all.
+// Postgres DDL is transactional, so even the DROP/CREATE in schema.sql
+// rolls back on failure — a half-reset demo cannot happen.
+async function seedDatabase(client, { reset = true, log = console.log } = {}) {
+  _s = SEED;                                   // same seed every run → identical demo every reset
   const invoices  = buildInvoices();
   const approvals = buildApprovals(invoices);
   const payments  = buildPayments(invoices);
 
-  if (!FILES_ONLY) {
-    if (!process.env.DATABASE_URL) {
-      console.error('DATABASE_URL is not set. Use --files-only to just write the Excel files.');
-      process.exit(1);
+  // Hashed before BEGIN so the transaction holds its locks only for the writes.
+  const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  const schema = reset ? fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8') : null;
+
+  await client.query('BEGIN');
+  try {
+    if (schema) { log('  applying schema.sql'); await client.query(schema); }
+
+    const userIds = {};
+    for (const u of USERS) {
+      const r = await client.query(
+        `INSERT INTO users (full_name,email,password_hash,role,acts_at_stage,can_approve,can_reject,can_import)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash
+         RETURNING user_id`,
+        [u.full_name, u.email, hash, u.role, u.acts_at_stage, u.can_approve, u.can_reject, u.can_import]);
+      userIds[u.email] = r.rows[0].user_id;
     }
-    console.log('Loading database...');
-    await loadDatabase(invoices, approvals, payments);
+    log(`  ${USERS.length} users`);
+
+    const invIds = {};
+    for (const v of invoices) {
+      const r = await client.query(
+        `INSERT INTO invoices (invoice_no,vendor,description,amount,invoice_date,due_date,stage,status,submitted_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING invoice_id`,
+        [v.invoice_no, v.vendor, v.description, v.amount, v.invoice_date, v.due_date,
+         v.stage, v.status, userIds['submitter@demo.app']]);
+      invIds[v.invoice_no] = r.rows[0].invoice_id;
+    }
+    log(`  ${invoices.length} invoices`);
+
+    for (const a of approvals) {
+      await client.query(
+        `INSERT INTO approvals (invoice_id,user_id,action,from_stage,to_stage,note,acted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [invIds[a.invoice_no], userIds[a.email], a.action, a.from_stage, a.to_stage, a.note, a.acted_at]);
+    }
+    log(`  ${approvals.length} approval rows`);
+
+    for (const p of payments) {
+      const id = invIds[p.invoice_no] || null;
+      await client.query(
+        `INSERT INTO payments (txn_id,invoice_no,invoice_id,amount,paid_date,bank,orphan_reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (txn_id) DO NOTHING`,
+        [p.txn_id, p.invoice_no, id, p.amount, p.paid_date, p.bank,
+         id ? null : 'No invoice with this number']);
+
+      if (id) {
+        await client.query(
+          `UPDATE invoices
+              SET paid_amount = paid_amount + $1,
+                  paid_date = $2,
+                  payment_state = CASE
+                    WHEN paid_amount + $1 <  amount THEN 'partial'
+                    WHEN paid_amount + $1 >  amount THEN 'over'
+                    ELSE 'full' END
+            WHERE invoice_id = $3`, [p.amount, p.paid_date, id]);
+      }
+    }
+    log(`  ${payments.length} payments`);
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
   }
+  return { invoices: invoices.length, approvals: approvals.length, payments: payments.length };
+}
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  console.log('Writing demo files...');
-  writeWorkbook(path.join(OUT_DIR, 'demo-invoices-to-import.xlsx'),
-                { Invoices: buildImportSheet(invoices.map(i => i.invoice_no)) });
-  writeWorkbook(path.join(OUT_DIR, 'demo-payments-to-import.xlsx'),
-                { Payments: buildPaymentSheet(invoices) });
+module.exports = { seedDatabase };
 
-  const paid = invoices.filter(i => i.stage === 'PAID').length;
-  console.log(`
+// ---------- command line ------------------------------------
+// Runs only when called directly (node seed.js), never when server.js
+// loads this file to reuse seedDatabase().
+if (require.main === module) {
+  (async () => {
+    if (!FILES_ONLY) {
+      if (!process.env.DATABASE_URL) {
+        console.error('DATABASE_URL is not set. Use --files-only to just write the Excel files.');
+        process.exit(1);
+      }
+      console.log('Loading database...');
+      const { Client } = require('pg');
+      const client = new Client({ connectionString: process.env.DATABASE_URL });
+      await client.connect();
+      try { await seedDatabase(client, { reset: RESET }); }
+      finally { await client.end(); }
+    }
+
+    // Rebuild from the start of the sequence, in the same order as always,
+    // so the import spreadsheets come out exactly as before.
+    _s = SEED;
+    const invoices = buildInvoices();
+    buildApprovals(invoices);
+
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+    console.log('Writing demo files...');
+    writeWorkbook(path.join(OUT_DIR, 'demo-invoices-to-import.xlsx'),
+                  { Invoices: buildImportSheet(invoices.map(i => i.invoice_no)) });
+    writeWorkbook(path.join(OUT_DIR, 'demo-payments-to-import.xlsx'),
+                  { Payments: buildPaymentSheet(invoices) });
+
+    const paid = invoices.filter(i => i.stage === 'PAID').length;
+    console.log(`
 Done.
   Invoices ......... ${invoices.length}  (${paid} paid, ${invoices.length - paid} in the chain)
   Login password ... ${DEMO_PASSWORD}   (all four accounts)
   Accounts ......... ${USERS.map(u => u.email).join(', ')}
 `);
-})();
+  })().catch(e => { console.error('Seed failed:', e.message); process.exit(1); });
+}

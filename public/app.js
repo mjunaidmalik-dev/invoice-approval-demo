@@ -193,7 +193,7 @@ function invoiceTable(rows, opts = {}) {
       const why = inv.status === 'Rejected' && inv.last_note
         ? `<span class="why">Returned by ${esc(inv.last_action_by || '')}: ${esc(inv.last_note)}</span>` : '';
       tr.innerHTML = `
-        <td><b>${esc(inv.invoice_no)}</b>${why}</td>
+        <td><b class="nowrap">${esc(inv.invoice_no)}</b>${why}</td>
         <td class="sup">${esc(inv.vendor)}<br><span class="muted">${esc(inv.description || '')}</span></td>
         <td class="num">${money(inv.amount)}${
           inv.payment_state === 'partial'
@@ -283,8 +283,8 @@ function renderPayments() {
   PAYMENTS.forEach(p => {
     const tr = el('tr', p.invoice_id ? '' : 'returned');
     tr.innerHTML = `
-      <td>${esc(p.txn_id)}</td>
-      <td>${esc(p.invoice_no || '—')}${p.vendor ? '<br><span class="muted">' + esc(p.vendor) + '</span>' : ''}</td>
+      <td class="nowrap">${esc(p.txn_id)}</td>
+      <td><span class="nowrap">${esc(p.invoice_no || '—')}</span>${p.vendor ? '<br><span class="muted">' + esc(p.vendor) + '</span>' : ''}</td>
       <td class="num">${money(p.amount)}</td>
       <td class="nowrap">${day(p.paid_date)}</td>
       <td>${esc(p.bank || '—')}</td>

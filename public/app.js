@@ -128,10 +128,19 @@ function renderDashboard() {
     const k = r.status === 'Rejected' ? 'Returned' : LABEL[r.stage];
     stages[k] = (stages[k] || 0) + r.n;
   });
+  // Colour belongs to the STAGE, never to its position. Handing colours out
+  // in whatever order the database returns rows let "Manager" come out red —
+  // the colour this app uses for rejection — whenever it happened to be listed
+  // fourth. Fixed order, fixed colour: the chart reads the same every time.
+  const STAGE_ORDER  = ['Raised', 'Manager', 'Finance', 'Paid', 'Returned'];
+  const STAGE_COLOUR = { Raised: '#c3ccd4', Manager: '#15202b', Finance: '#7b8895',
+                         Paid: '#14614a', Returned: '#a32b23' };
+  const shown = STAGE_ORDER.filter(k => stages[k])
+    .concat(Object.keys(stages).filter(k => !STAGE_ORDER.includes(k)));   // anything unforeseen still appears
   CHARTS.push(new Chart($('#cStage'), {
     type: 'doughnut',
-    data: { labels: Object.keys(stages), datasets: [{ data: Object.values(stages),
-            backgroundColor: ['#15202b', '#4d5b69', '#14614a', '#a32b23', '#c3ccd4'] }] },
+    data: { labels: shown, datasets: [{ data: shown.map(k => stages[k]),
+            backgroundColor: shown.map(k => STAGE_COLOUR[k] || '#c3ccd4') }] },
     options: { responsive: true, maintainAspectRatio: false, cutout: '58%',
                plugins: { legend: { position: 'bottom' } } }
   }));
